@@ -94,7 +94,7 @@ func main() {
 
 
 	log.Println("Start Alert System")
-	viper.SetConfigName("lbc-alert")
+	viper.SetConfigName("web-alert")
 	viper.AddConfigPath("$HOME/.config")
 	viper.AddConfigPath("./config")
 
