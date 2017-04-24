@@ -2,7 +2,7 @@
 host = "smtp.server.fr"
 port = 25
 user = "your_user"
-pass = "your_pass""
+pass = "your_pass"
 
 [alert1]
 url = "http://hackaday.com/"
