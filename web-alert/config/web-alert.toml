@@ -9,3 +9,4 @@ url = "http://hackaday.com/"
 subject = "Alerte Hackaday"
 from = "robot@yourdomain.com"
 to = "dest@yourdoamin.com"
+sleep = 360
