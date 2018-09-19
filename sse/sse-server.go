@@ -18,13 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//
+// curl -H "Accept: text/event-stream" -v "http://xxxxxxxxxx:port/xxx"
+// -H "Accept: text/event-stream" is not mandatory
+
+
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+	"strconv"
 )
 
 // Example SSE server in Golang.
@@ -73,7 +80,7 @@ func (broker *Broker) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Cache-Control", "no-cache")
-	rw.Header().Set("Connection", "keep-alive")
+//	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Each connection registers its own message channel with the Broker's connections registry
@@ -148,6 +155,22 @@ func main() {
 		}
 	}()
 
-	log.Fatal("HTTP server error: ", http.ListenAndServe("localhost:3000", broker))
+	withSSL := flag.Bool("ssl", false, "enable ssl (needs server.crt and server.key")
+	portPtr := flag.Int("port", 9081, "TCP Port to bind")
+    flag.Parse()
+
+    bindPort := strconv.Itoa(*portPtr);
+
+	var err error
+	if *withSSL == false {
+        fmt.Printf("Starting HTTP Server on port :%s\n", bindPort)
+		err = http.ListenAndServe(":"+ bindPort, nil)
+	} else {
+        fmt.Printf("Starting HTTP + SSL  Server on port :%s\n", bindPort)
+		err = http.ListenAndServeTLS(":" + bindPort, "server.crt", "server.key", broker)
+	}
+	if err != nil {
+		log.Fatal("ListenAndServe Error : ", err)
+	}
 
 }
