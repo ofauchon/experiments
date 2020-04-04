@@ -63,6 +63,24 @@ func main() {
 	uart.Write([]byte("Starting Golang RFM69 demo.\r\n"))
 	go serial()
 
-	rfm69.New(machine.SPI0, machine.PA1, machine.PA6, machine.PA7)
+	// SPI => SPI0
+	// RESET => PA0
+	// NSS => PA4
+
+	// SPI & RFM
+
+	machine.SPI0.Configure(machine.SPIConfig{
+		Frequency: 8000000,
+		Mode:      0},
+	)
+
+	d := rfm69.New(machine.SPI0, machine.PA0, machine.PA4, false)
+	d.Configure()
+
+	var temp uint8
+
+	println("Reading temp")
+	temp = d.ReadTemperature(0)
+	println("Temp : ", temp)
 
 }
