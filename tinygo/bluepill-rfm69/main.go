@@ -9,6 +9,9 @@ import (
 
 var uart machine.UART
 
+/*
+ * Gorouting for Handling serial communication
+ */
 func serial() string {
 	input := make([]byte, 64) // serial port buffer
 	i := 0
@@ -38,12 +41,10 @@ func serial() string {
 
 }
 
-// blink the LED with given duration
+/*
+ * Gorouting for LED blinking
+ */
 func blink(led machine.Pin, delay time.Duration) {
-
-	println("Hello world from Go!")
-
-	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	for {
 		led.Low()
 		time.Sleep(delay)
@@ -55,32 +56,33 @@ func blink(led machine.Pin, delay time.Duration) {
 // start here at main function
 func main() {
 
+	// Led
+	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	go blink(machine.LED, 1000*time.Millisecond)
 
-	// Init UART
+	// UART
 	uart = machine.UART0
 	uart.Configure(machine.UARTConfig{9600, 1, 0})
 	uart.Write([]byte("Starting Golang RFM69 demo.\r\n"))
 	go serial()
 
-	// SPI => SPI0
-	// RESET => PA0
-	// NSS => PA4
-
-	// SPI & RFM
-
-	machine.SPI0.Configure(machine.SPIConfig{
-		Frequency: 8000000,
+	// SPI
+	machine.SPI1.Configure(machine.SPIConfig{
+		Frequency: 250000,
 		Mode:      0},
 	)
 
-	d := rfm69.New(machine.SPI0, machine.PA0, machine.PA4, false)
-	d.Configure()
+	// RFM Configuration
+	// (NSS => PA1, RESET => PA0, SPI => SPI0)
+	machine.PA0.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	machine.PA1.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	d := rfm69.New(machine.SPI0, machine.PA0, machine.PA1, false)
 
-	var temp uint8
+	for {
 
-	println("Reading temp")
-	temp = d.ReadTemperature(0)
-	println("Temp : ", temp)
+		println("Temperature:", d.ReadTemperature(0))
+		time.Sleep(10 * time.Second)
+
+	}
 
 }
