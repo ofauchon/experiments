@@ -15,9 +15,7 @@ tinygo build -size short -target=bluepill -o main.go
 ```
 # Flash and Run 
 
-```
-tinygo flash -size short -target=bluepill -o main.go
-```
+tinygo flash -size short -target=bluepill main.go
 
 connect serial with:
 picocom /dev/ttyUSB0  -b 9600
