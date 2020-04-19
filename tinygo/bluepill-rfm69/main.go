@@ -16,6 +16,14 @@ var d *rfm69.Device
 func processCmd(cmd string) error {
 	ss := strings.Split(cmd, " ")
 	switch ss[0] {
+	case "send":
+		if len(ss) == 2 {
+			println("Send ", len(ss[1]), "bytes")
+			err := d.Send([]byte(ss[1]))
+			if err != nil {
+				println(err)
+			}
+		}
 	case "get":
 		switch ss[1] {
 		case "temp":
@@ -169,11 +177,7 @@ func main() {
 	var cycle uint32
 
 	for {
-		println("Send packet")
-		err := d.Send([]byte("TEST_TEST"))
-		if err != nil {
-			println(err)
-		}
+
 		time.Sleep(5 * time.Second)
 		cycle++
 	}
