@@ -13,16 +13,22 @@ import (
 var uart machine.UART
 var d *rfm69.Device
 
+var send_data = string("")
+var send_delay = int(0)
+
+func dumpIrqFlags(irqflags1, irqflags2 uint8)
+{
+
+	
+
+}
+
 func processCmd(cmd string) error {
 	ss := strings.Split(cmd, " ")
 	switch ss[0] {
 	case "send":
 		if len(ss) == 2 {
-			println("Send ", len(ss[1]), "bytes")
-			err := d.Send([]byte(ss[1]))
-			if err != nil {
-				println(err)
-			}
+			send_data = ss[1]
 		}
 	case "get":
 		switch ss[1] {
@@ -177,6 +183,14 @@ func main() {
 	var cycle uint32
 
 	for {
+
+		if len(send_data) > 0 {
+			println("Send ", len(send_data), "bytes")
+			err := d.Send([]byte(send_data))
+			if err != nil {
+				println(err)
+			}
+		}
 
 		time.Sleep(5 * time.Second)
 		cycle++
