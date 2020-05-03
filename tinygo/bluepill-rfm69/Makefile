@@ -1,14 +1,24 @@
 
 BM_DEV=/dev/ttyACM0
+OUT=main.elf
+
+
+BM_TTY_GDB=$(shell grep -n "Black Magic GDB Server" /sys/class/tty/tty*/device/interface 2>&1 | cut -d/ -f5)
+BM_TTY_USART=$(shell grep -n "Black Magic UART Port" /sys/class/tty/tty*/device/interface 2>&1 | cut -d/ -f5)
+
+
 
 build:
-	tinygo build -size short -target=bluepill -o main.hex main.go	
+	tinygo build -size short -target=bluepill -o $(OUT) main.go	
 
 flash:
-	arm-none-eabi-gdb -nx --batch -ex "target extended-remote $(BM_DEV)" -ex "monitor swdp_scan" -ex "attach 1" -ex load -ex compare-sections -ex kill ./main.hex
+	@echo "******** BM GDB TTY:"$(BM_TTY_GDB)"************"
+	arm-none-eabi-gdb -nx --batch -ex "target extended-remote /dev/$(BM_TTY_GDB)" -ex "monitor swdp_scan" -ex "attach 1" -ex load -ex compare-sections -ex kill $(OUT) 
+
 
 debug:
-	arm-none-eabi-gdb -nx -ex "target extended-remote $(BM_DEV)"  -ex "monitor swdp_scan" -ex "attach 1" -ex "set mem inaccessible-by-default off" -ex "load main.hex" -ex "compare-sections"
+	@echo "******** BM USART TTY:"$(BM_TTY_USART)"************"
+	arm-none-eabi-gdb -nx -ex "target extended-remote /dev/$(BM_TTY_GDB)"  -ex "monitor swdp_scan" -ex "attach 1" -ex "set mem inaccessible-by-default off" -ex "file $(OUT)" -ex "load $(OUT)" -ex "compare-sections"
 
 term:
-	picocom -b 9600 /dev/ttyACM1
+	picocom -b 9600 /dev/$(BM_TTY_USART)
