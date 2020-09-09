@@ -43,60 +43,69 @@ func processCmd(cmd string) error {
 			}
 		}
 	case "get":
-		switch ss[1] {
-		case "freq":
-			println("Freq:", d.GetFrequency())
-		case "temp":
-			temp, _ := d.ReadTemperature(0)
-			println("Temperature:", temp)
-		case "mode":
-			mode := d.GetMode()
-			println(" Mode:", mode)
-		case "regs":
-			for i := uint8(0); i < 0x60; i++ {
-				val, _ := d.ReadReg(i)
-				println(" Reg: ", strconv.FormatInt(int64(i), 16), " -> ", strconv.FormatInt(int64(val), 16))
+		if len(ss) == 2 {
+			switch ss[1] {
+			case "freq":
+				println("Freq:", d.GetFrequency())
+			case "temp":
+				temp, _ := d.ReadTemperature(0)
+				println("Temperature:", temp)
+			case "mode":
+				mode := d.GetMode()
+				println(" Mode:", mode)
+			case "regs":
+				for i := uint8(0); i < 0x60; i++ {
+					val, _ := d.ReadReg(i)
+					println(" Reg: ", strconv.FormatInt(int64(i), 16), " -> ", strconv.FormatInt(int64(val), 16))
+				}
+			default:
+				return errors.New("Unknown command get")
 			}
-		default:
-			return errors.New("Unknown command get")
 		}
 
 	case "set":
-		switch ss[1] {
-		case "freq":
-			val, _ := strconv.ParseUint(ss[2], 10, 32)
-			d.SetFrequency(uint32(val))
-			println("Freq set to ", val)
-		case "power":
-			val, _ := strconv.ParseUint(ss[2], 10, 32)
-			d.SetTxPower(uint8(val))
-			println("TxPower set to ", val)
+		if len(ss) == 3 {
+			switch ss[1] {
+			case "freq":
+				val, _ := strconv.ParseUint(ss[2], 10, 32)
+				d.SetFrequency(uint32(val))
+				println("Freq set to ", val)
+			case "power":
+				val, _ := strconv.ParseUint(ss[2], 10, 32)
+				d.SetTxPower(uint8(val))
+				println("TxPower set to ", val)
+			}
+		} else {
+			println("invalid use of set command")
 		}
 
 	case "mode":
-		switch ss[1] {
-		case "standby":
-			d.SetMode(rfm69.RFM69_MODE_STANDBY)
-			d.WaitForMode()
-			println("Mode changed !")
-		case "sleep":
-			d.SetMode(rfm69.RFM69_MODE_SLEEP)
-			d.WaitForMode()
-			println("Mode changed !")
-		case "tx":
-			d.SetMode(rfm69.RFM69_MODE_TX)
-			d.WaitForMode()
-			println("Mode changed !")
-		case "rx":
-			d.SetMode(rfm69.RFM69_MODE_RX)
-			d.WaitForMode()
-			println("Mode changed !")
-		default:
-			return errors.New("Unknown command mode")
+		if len(ss) == 2 {
+			switch ss[1] {
+			case "standby":
+				d.SetMode(rfm69.RFM69_MODE_STANDBY)
+				d.WaitForMode()
+				println("Mode changed !")
+			case "sleep":
+				d.SetMode(rfm69.RFM69_MODE_SLEEP)
+				d.WaitForMode()
+				println("Mode changed !")
+			case "tx":
+				d.SetMode(rfm69.RFM69_MODE_TX)
+				d.WaitForMode()
+				println("Mode changed !")
+			case "rx":
+				d.SetMode(rfm69.RFM69_MODE_RX)
+				d.WaitForMode()
+				println("Mode changed !")
+			default:
+				return errors.New("Unknown command mode")
+			}
 		}
 	default:
 		return errors.New("Unknown command")
 	}
+
 	return nil
 }
 
@@ -146,7 +155,29 @@ func blink(led machine.Pin, delay time.Duration) {
 func PB1_Int_Handler(intr interrupt.Interrupt) {
 	println("INTB1: ", machine.PB1.Get())
 	stm32.EXTI.PR.SetBits(stm32.EXTI_PR_PR1_Msk) // Clear interrupt
-	d.Receive()
+	data, _ := d.Receive()
+	out := ""
+	for i := 0; i < len(data); i++ {
+		out += strconv.Itoa(int(data[i])) + "(" + strconv.FormatInt(int64(data[i]), 16) + "), "
+	}
+	println("RX: ", out)
+
+	if len(data) == 18 && data[0] == 0x1 {
+		var serial, cntr uint64
+		var power uint16
+		serial = uint64(data[1])
+		serial = serial<<8 + uint64(data[5])
+		serial = serial<<8 + uint64(data[4])
+		serial = serial<<8 + uint64(data[3])
+		serial = serial<<8 + uint64(data[2])
+		cntr = uint64(data[10])
+		cntr = cntr<<8 + uint64(data[9])
+		cntr = cntr<<8 + uint64(data[8])
+		cntr = cntr<<8 + uint64(data[7])
+
+		power = uint16(data[16])<<8 + uint16(data[15])
+		println("Meter ID: ", serial, " Count:", cntr, " Power:", power)
+	}
 }
 
 func init_radio() {
@@ -260,25 +291,6 @@ func main() {
 	var cycle uint32
 
 	for {
-		/*
-			println("Loop")
-			d.SetMode(rfm69.RFM69_MODE_STANDBY)
-			temp, err := d.ReadTemperature(0)
-			if err != nil {
-				println(err)
-			}
-			println("PB0 temp: ", temp, "  state:", machine.PB0.Get())
-			d.SetFrequency(433900)
-
-			if len(send_data) > 0 {
-				println("Send ", len(send_data), "bytes")
-				err := d.Send([]byte(send_data))
-				if err != nil {
-					println(err)
-				}
-			}
-			//d.SetMode(rfm69.RFM69_MODE_RX)
-		*/
 		time.Sleep(5 * time.Second)
 		cycle++
 	}
