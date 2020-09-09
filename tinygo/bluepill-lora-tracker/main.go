@@ -2,14 +2,14 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"machine"
 	"strconv"
 	"strings"
 	"time"
 
-	nmea "./tools"
+	//nmea "./tools"
 
+	"tinygo.org/x/drivers/gps"
 	"tinygo.org/x/drivers/lora/sx127x"
 )
 
@@ -94,10 +94,38 @@ func processCmd(cmd string) error {
 	return nil
 }
 
-// serial() function is a gorouting for handling USART rx data
-func serial() string {
+// gpsTask handle communication with GPS Module
+func gpsTask(parser gps.GPSParser) {
+	var fix gps.Fix
+	println("Start gpsTask")
+	for {
+		println("gpsTask tick")
+		fix = parser.NextFix()
+		/*
+		   		println("aa ", fix.Valid, "alt", fix.Altitude)
+
+		   		if fix.Valid {
+		   			print(fix.Time.Format("15:04:05"))
+		   			print(", lat=", fix.Latitude)
+		   			print(", long=", fix.Longitude)
+		   			print(", altitude:=")
+		   			print(", satellites=", fix.Satellites)
+		   			println()
+		   		} else {
+		   			println("No fix")
+		   	println("Start gpsTask")
+
+		   }
+		*/
+
+		time.Sleep(10 * time.Second)
+
+	}
+}
+
+// serialTask handles interaction with the serial console
+func consoleTask() string {
 	inputConsole := make([]byte, 128) // serial port buffer
-	inputGps := make([]byte, 128)     // serial port buffer
 
 	for {
 
@@ -121,63 +149,10 @@ func serial() string {
 			}
 		}
 
-		// Process GPS messages
-		for uartGps.Buffered() > 0 {
-
-			data, _ := uartGps.ReadByte() // read a character
-			if data == 10 {
-
-				//fmt.Printf("\r\n***[GPS] %s", inputGps, " *** \r\n")
-
-				//				s, _ := nmea.Parse(string(inputGps[:iGps]))
-				//				if s.DataType() == nmea.TypeRMC {
-				/*
-					m := s.(nmea.RMC)
-					fm	t.Printf("Latitude GPS: %s\n", nmea.FormatGPS(m.Latitude))
-					fmt.Printf("Latitude DMS: %s\n", nmea.FormatDMS(m.Latitude))
-					fmt.Printf("Longitude GPS: %s\n", nmea.FormatGPS(m.Longitude))
-				*/
-				//				}
-
-				sentence := string(inputGps)
-				//				if nmea.IsValidSentence(sentence) {
-				endOfTypeIndex := strings.IndexByte(sentence, ',')
-				sentenceType := sentence[1:endOfTypeIndex]
-				//println("SentenceType: ", sentenceType)
-
-				if sentenceType == "GPGGA" {
-					g, err := nmea.ParseGPGGA(sentence)
-					if err == nil {
-						println("*Fix:", g.PositionFix, "Sat", g.UsedSatellites, " Long=", g.Longitude, " Lat=", g.Latitude, "Alt=", g.Altitude)
-					} else {
-						fmt.Println(err)
-					}
-				}
-
-				if sentenceType == "GPRMC" {
-					g, err := nmea.ParseGPRMC(sentence)
-					if err == nil {
-						//		fmt.Printf("* RMC Lon=%f Lat=%f Spd=%f Hdg=%f", g.Longitude, g.Latitude, g.Speed, g.Heading)
-						println("*Status:", g.Status, " Spd=", g.Speed, "Head=%f", g.Heading)
-					}
-				}
-
-				//				}
-
-				inputGps = nil
-
-			} else if data != 13 {
-				inputGps = append(inputGps, data)
-			}
-
-		}
-
 		time.Sleep(10 * time.Millisecond)
 	}
 
 }
-
-//s, err := nmea.Parse(sentence)
 
 // blink is endless loop to make status led blink
 func blink(led machine.Pin, delay time.Duration) {
@@ -229,10 +204,15 @@ func main() {
 
 	// UARTs
 	uartConsole = machine.UART0
-	uartGps = machine.UART1
 	uartConsole.Configure(machine.UARTConfig{9600, 1, 0})
-	uartGps.Configure(machine.UARTConfig{9600, 1, 0})
-	go serial()
+	go consoleTask()
+
+	// GPS
+	uartGps = machine.UART1
+	uartGps.Configure(machine.UARTConfig{BaudRate: 9600})
+	ublox := gps.NewUART(&uartGps)
+	parser := gps.Parser(ublox)
+	go gpsTask(parser)
 
 	println("GoTiny sx127x Demo")
 

@@ -19,7 +19,8 @@ flash:
 
 debug:
 	@echo "******** BM USART TTY:"$(BM_TTY_USART)"************"
-	arm-none-eabi-gdb -nx -ex "target extended-remote /dev/$(BM_TTY_GDB)"  -ex "monitor swdp_scan" -ex "attach 1" -ex "set mem inaccessible-by-default off" -ex "file $(OUT)" -ex "load $(OUT)" -ex "compare-sections"
+	arm-none-eabi-gdb -nx -ex "target extended-remote /dev/$(BM_TTY_GDB)"  -ex "monitor swdp_scan" -ex "attach 1" -ex "set mem inaccessible-by-default off" -ex "file $(OUT)" -ex "load" 
+	#arm-none-eabi-gdb -nx -ex "target extended-remote /dev/$(BM_TTY_GDB)"  -ex "monitor swdp_scan" -ex "attach 1" -ex "set mem inaccessible-by-default off" -ex "file $(OUT)" -ex "load $(OUT)" -ex "compare-sections"
 
 term:
 	@echo "******** BM USART TTY:"$(BM_TTY_USART)"************"
