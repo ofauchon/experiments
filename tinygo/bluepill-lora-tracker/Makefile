@@ -1,6 +1,7 @@
 
 BM_DEV=/dev/ttyACM0
 OUT=main.elf
+BOARD=bluepill
 
 
 BM_TTY_GDB=$(shell grep -n "Black Magic GDB Server" /sys/class/tty/tty*/device/interface 2>&1 | cut -d/ -f5)
@@ -10,7 +11,7 @@ OPT=z
 
 
 build:
-	tinygo build -size=full -target=bluepill -opt=${OPT} -o $(OUT) main.go 
+	tinygo build -size=full -target=${BOARD} -opt=${OPT} -o $(OUT) main.go
 
 flash:
 	@echo "******** BM GDB TTY:"$(BM_TTY_GDB)"************"
