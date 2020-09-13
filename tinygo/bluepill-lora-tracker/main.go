@@ -2,16 +2,20 @@ package main
 
 import (
 	"errors"
+	"image/color"
 	"machine"
 	"strconv"
 	"strings"
 	"time"
 
-	//nmea "./tools"
+	"./tools"
 
 	"tinygo.org/x/drivers/gps"
 	"tinygo.org/x/drivers/lora/sx127x"
+	"tinygo.org/x/drivers/pcd8544"
 )
+
+var lcd *pcd8544.Device
 
 var loraConfig = sx127x.Config{
 	Frequency:       868000000,
@@ -28,6 +32,12 @@ var loraRadio sx127x.Device
 
 var send_data = string("")
 var send_delay = int(0)
+
+type status struct {
+	gpsSats uint8
+}
+
+var st status
 
 // processCmd parses commands and execute actions
 func processCmd(cmd string) error {
@@ -95,30 +105,37 @@ func processCmd(cmd string) error {
 }
 
 // gpsTask handle communication with GPS Module
-func gpsTask(parser gps.GPSParser) {
+func gpsTask(pGps gps.Device, pParser gps.Parser) {
 	var fix gps.Fix
 	println("Start gpsTask")
 	for {
-		println("gpsTask tick")
-		fix = parser.NextFix()
-		/*
-		   		println("aa ", fix.Valid, "alt", fix.Altitude)
+		s, err := pGps.NextSentence()
+		if err != nil {
+			//println(err)
+			continue
+		}
 
-		   		if fix.Valid {
-		   			print(fix.Time.Format("15:04:05"))
-		   			print(", lat=", fix.Latitude)
-		   			print(", long=", fix.Longitude)
-		   			print(", altitude:=")
-		   			print(", satellites=", fix.Satellites)
-		   			println()
-		   		} else {
-		   			println("No fix")
-		   	println("Start gpsTask")
+		fix, err = pParser.Parse(s)
+		if err != nil {
+			//println(err)
+			continue
+		}
+		print("*")
 
-		   }
-		*/
+		if fix.Valid {
+			st.gpsSats = uint8(fix.Satellites)
+			print(fix.Time.Format("15:04:05"))
+			print(", lat=", fix.Latitude)
+			print(", long=", fix.Longitude)
+			print(", altitude:=")
+			print(", satellites=", fix.Satellites)
+			println()
+		} else {
+			println("No fix")
 
-		time.Sleep(10 * time.Second)
+		}
+
+		time.Sleep(500 * time.Millisecond)
 
 	}
 }
@@ -155,7 +172,7 @@ func consoleTask() string {
 }
 
 // blink is endless loop to make status led blink
-func blink(led machine.Pin, delay time.Duration) {
+func blinkTask(led machine.Pin, delay time.Duration) {
 	for {
 		led.Low()
 		time.Sleep(delay)
@@ -195,32 +212,111 @@ func initRadio() {
 
 }
 
+func initLCD() {
+	dcPin := machine.PB12
+	dcPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	rstPin := machine.PB13
+	rstPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	scePin := machine.PB14
+	scePin.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	machine.SPI0.Configure(machine.SPIConfig{})
+
+	lcd = pcd8544.New(machine.SPI0, dcPin, rstPin, scePin)
+	lcd.Configure(pcd8544.Config{})
+
+	/*
+		var x int16
+		var y int16
+		deltaX := int16(1)
+		deltaY := int16(1)
+		for {
+			pixel := lcd.GetPixel(x, y)
+			c := color.RGBA{255, 255, 255, 255}
+			if pixel {
+				c = color.RGBA{0, 0, 0, 255}
+			}
+			lcd.SetPixel(x, y, c)
+			lcd.Display()
+
+			x += deltaX
+			y += deltaY
+
+			if x == 0 || x == 83 {
+				deltaX = -deltaX
+			}
+			if y == 0 || y == 47 {
+				deltaY = -deltaY
+			}
+			time.Sleep(1 * time.Millisecond)
+
+		}
+	*/
+
+}
+
+func printSomething(msg string, x int16, y int16) {
+
+	msg2 := []byte(msg)
+	var c byte
+	var col color.RGBA
+
+	for k := 0; k < len(msg); k++ {
+		c = msg2[k]
+
+		for i := 0; i < 8; i++ {
+			pix8 := tools.FontCP437[c][i]
+
+			for j := 0; j < 8; j++ {
+				col = color.RGBA{0, 0, 0, 255}
+
+				if pix8&(1<<j) > 0 {
+					col = color.RGBA{255, 255, 255, 255}
+				}
+				lcd.SetPixel(x+int16(k)*8+int16(i), y+int16(j), col)
+			}
+		}
+	}
+	lcd.Display()
+
+}
+
+func updateLCD() {
+	printSomething("GPS:"+strconv.Itoa(int(st.gpsSats)), 0, 0)
+	printSomething("LORA:", 40, 0)
+	lcd.Display()
+
+}
+
 // main is .... main
 func main() {
 
 	// Led
 	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	go blink(machine.LED, 250*time.Millisecond)
+	go blinkTask(machine.LED, 250*time.Millisecond)
 
 	// UARTs
 	uartConsole = machine.UART0
 	uartConsole.Configure(machine.UARTConfig{9600, 1, 0})
+	println("GoTiny sx127x Demo")
 	go consoleTask()
+
+	// LCD
+	initLCD()
 
 	// GPS
 	uartGps = machine.UART1
 	uartGps.Configure(machine.UARTConfig{BaudRate: 9600})
-	ublox := gps.NewUART(&uartGps)
-	parser := gps.Parser(ublox)
-	go gpsTask(parser)
+	gps1 := gps.NewUART(&uartGps)
+	parser1 := gps.NewParser()
+	go gpsTask(gps1, parser1)
 
-	println("GoTiny sx127x Demo")
-
+	// LORA
 	initRadio()
 
 	var cycle uint32
 
 	for {
+		updateLCD()
 		time.Sleep(5 * time.Second)
 		cycle++
 	}
