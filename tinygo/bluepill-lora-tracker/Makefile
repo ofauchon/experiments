@@ -1,4 +1,5 @@
 
+TINYGO=~/go/bin/tinygo
 BM_DEV=/dev/ttyACM0
 OUT=main.elf
 BOARD=bluepill
@@ -11,7 +12,7 @@ OPT=z
 
 
 build:
-	tinygo build -size=full -target=${BOARD} -opt=${OPT} -o $(OUT) main.go
+	${TINYGO} build -size=full -target=${BOARD} -opt=${OPT} -o $(OUT) main.go
 
 flash:
 	@echo "******** BM GDB TTY:"$(BM_TTY_GDB)"************"

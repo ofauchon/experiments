@@ -26,7 +26,7 @@ var loraConfig = sx127x.Config{
 }
 
 var uartConsole machine.UART
-var uartGps machine.UART
+var uartGps *machine.UART
 
 var loraRadio sx127x.Device
 
@@ -34,7 +34,7 @@ var send_data = string("")
 var send_delay = int(0)
 
 type status struct {
-	gpsSats uint8
+	fix *gps.Fix
 }
 
 var st status
@@ -123,16 +123,7 @@ func gpsTask(pGps gps.Device, pParser gps.Parser) {
 		print("*")
 
 		if fix.Valid {
-			st.gpsSats = uint8(fix.Satellites)
-			print(fix.Time.Format("15:04:05"))
-			print(", lat=", fix.Latitude)
-			print(", long=", fix.Longitude)
-			print(", altitude:=")
-			print(", satellites=", fix.Satellites)
-			println()
-		} else {
-			println("No fix")
-
+			st.fix = &fix
 		}
 
 		time.Sleep(500 * time.Millisecond)
@@ -223,35 +214,6 @@ func initLCD() {
 
 	lcd = pcd8544.New(machine.SPI0, dcPin, rstPin, scePin)
 	lcd.Configure(pcd8544.Config{})
-
-	/*
-		var x int16
-		var y int16
-		deltaX := int16(1)
-		deltaY := int16(1)
-		for {
-			pixel := lcd.GetPixel(x, y)
-			c := color.RGBA{255, 255, 255, 255}
-			if pixel {
-				c = color.RGBA{0, 0, 0, 255}
-			}
-			lcd.SetPixel(x, y, c)
-			lcd.Display()
-
-			x += deltaX
-			y += deltaY
-
-			if x == 0 || x == 83 {
-				deltaX = -deltaX
-			}
-			if y == 0 || y == 47 {
-				deltaY = -deltaY
-			}
-			time.Sleep(1 * time.Millisecond)
-
-		}
-	*/
-
 }
 
 func printSomething(msg string, x int16, y int16) {
@@ -281,9 +243,13 @@ func printSomething(msg string, x int16, y int16) {
 }
 
 func updateLCD() {
-	printSomething("GPS:"+strconv.Itoa(int(st.gpsSats)), 0, 0)
-	printSomething("LORA:", 40, 0)
-	lcd.Display()
+	if st.fix != nil {
+		printSomething("St:"+strconv.Itoa(int(st.fix.Satellites)), 0, 0)
+		printSomething("Al:"+strconv.Itoa(int(st.fix.Altitude)), 35, 0)
+		printSomething("Sp:"+strconv.Itoa(int(st.fix.Speed)), 0, 9)
+		printSomething("Hd:"+strconv.Itoa(int(st.fix.Heading)), 35, 9)
+		lcd.Display()
+	}
 
 }
 
@@ -306,7 +272,7 @@ func main() {
 	// GPS
 	uartGps = machine.UART1
 	uartGps.Configure(machine.UARTConfig{BaudRate: 9600})
-	gps1 := gps.NewUART(&uartGps)
+	gps1 := gps.NewUART(uartGps)
 	parser1 := gps.NewParser()
 	go gpsTask(gps1, parser1)
 
