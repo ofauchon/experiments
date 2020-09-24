@@ -204,13 +204,16 @@ func initRadio() {
 }
 
 func initLCD() {
+	// SPI
 	dcPin := machine.PB12
 	dcPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	rstPin := machine.PB13
 	rstPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	scePin := machine.PB14
 	scePin.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	machine.SPI0.Configure(machine.SPIConfig{})
+	machine.SPI0.Configure(machine.SPIConfig{
+		Frequency: 250000,
+	})
 
 	lcd = pcd8544.New(machine.SPI0, dcPin, rstPin, scePin)
 	lcd.Configure(pcd8544.Config{})
@@ -218,23 +221,31 @@ func initLCD() {
 
 func printSomething(msg string, x int16, y int16) {
 
+	font := tools.Font5x7
+	fontWidth := 5
+	fontHeight := 7
+
 	msg2 := []byte(msg)
 	var c byte
 	var col color.RGBA
 
 	for k := 0; k < len(msg); k++ {
 		c = msg2[k]
+		if c < 32 || c > 127 {
+			continue
+		}
+		c -= 32
+		print(string(c))
+		for i := 0; i < fontWidth; i++ {
+			pix8 := font[c][i]
 
-		for i := 0; i < 8; i++ {
-			pix8 := tools.FontCP437[c][i]
-
-			for j := 0; j < 8; j++ {
+			for j := 0; j < fontHeight; j++ {
 				col = color.RGBA{0, 0, 0, 255}
 
 				if pix8&(1<<j) > 0 {
 					col = color.RGBA{255, 255, 255, 255}
 				}
-				lcd.SetPixel(x+int16(k)*8+int16(i), y+int16(j), col)
+				lcd.SetPixel(x+int16(k)*int16(fontWidth)+int16(i), int16(y)+int16(j), col)
 			}
 		}
 	}
@@ -263,11 +274,13 @@ func main() {
 	// UARTs
 	uartConsole = machine.UART0
 	uartConsole.Configure(machine.UARTConfig{9600, 1, 0})
-	println("GoTiny sx127x Demo")
+	println("Zaza Lora Tracker")
 	go consoleTask()
 
 	// LCD
 	initLCD()
+	printSomething("Zaza Lora Tracker", 0, 0)
+	lcd.Display()
 
 	// GPS
 	uartGps = machine.UART1
