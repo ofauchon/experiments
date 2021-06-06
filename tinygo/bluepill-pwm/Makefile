@@ -1,18 +1,21 @@
-
 TINYGO=~/go/bin/tinygo
 BM_DEV=/dev/ttyACM0
-OUT=main.elf
+OUT=pwm.elf
+SRC=pwm.go
+
 BOARD=bluepill
+SPEED=115200
+
 
 
 BM_TTY_GDB=$(shell grep -n "Black Magic GDB Server" /sys/class/tty/tty*/device/interface 2>&1 | cut -d/ -f5)
 BM_TTY_USART=$(shell grep -n "Black Magic UART Port" /sys/class/tty/tty*/device/interface 2>&1 | cut -d/ -f5)
 
-OPT=z
+OPT=1
 
 
 build:
-	${TINYGO} build -size=full -target=${BOARD} -opt=${OPT} -o $(OUT) main.go
+	${TINYGO} build -size=full -target=${BOARD} -opt=${OPT} -o ${OUT} ${SRC}
 
 flash:
 	@echo "******** BM GDB TTY:"$(BM_TTY_GDB)"************"
@@ -26,4 +29,7 @@ debug:
 
 term:
 	@echo "******** BM USART TTY:"$(BM_TTY_USART)"************"
-	picocom -b 9600 /dev/$(BM_TTY_USART) --imap lfcrlf
+	picocom -b $(SPEED) /dev/$(BM_TTY_USART) --imap lfcrlf
+
+#all: 
+#	tinygo build -target bluepill -o zeroconso.elf zeroconso.go
