@@ -58,7 +58,7 @@ func DecodeMijia(dat []byte) (*Mijia, error) {
 
 	ret.Temp = float32(uint32(dat[7])*0xFF+uint32(dat[6])) / 100
 	ret.Humi = float32(uint32(dat[9])*0xFF+uint32(dat[8])) / 100
-	ret.Batt = float32(uint32(dat[11])*0xFF+uint32(dat[10])) / 100
+	ret.Batt = float32(uint32(dat[11])*0xFF+uint32(dat[10])) / 1000
 	ret.FrameCount = dat[12]
 	return ret, nil
 }
