@@ -106,19 +106,21 @@ func main() {
 	fmt.Println("Starting ble2influx")
 	flag.Parse()
 
+	fmt.Println("Creating BLE device")
 	d, err := dev.NewDevice(*device)
 	if err != nil {
 		log.Fatalf("can't new device : %s", err)
 	}
-	ble.SetDefaultDevice(d)
 
+	fmt.Println("Switching to ", *dropuser, " user")
 	chuser(*dropuser)
 
+	//InfluxDB connection
 	fmt.Println("Connecting to influxDB server")
 	fmt.Println("  server", *influx_server, " bucket:", *influx_bucket, " org:", *influx_org)
+	ble.SetDefaultDevice(d)
 	client = influxdb2.NewClient(*influx_server, *influx_token)
 	defer client.Close()
-
 	writeAPI = client.WriteAPI(*influx_org, *influx_bucket)
 
 	// Scan for specified durantion, or until interrupted by user.
