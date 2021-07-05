@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -21,13 +22,24 @@ import (
 	"github.com/influxdata/influxdb-client-go/api"
 )
 
-/*
-nodeConfigJson:= `{
-{"mac": "a4c1381c0390",
-"type": "xiaomi_mijia",
-"name": "mijia_salon1",
-"long_name":"Capteur dans le salon"},`
-*/
+type MijiaDeviceConfig struct {
+	Mac   string `json:"mac"`
+	Model string `json:"model"`
+	Name  string `json:"name"`
+	Desc  string `json:"desc"`
+}
+
+var nodeConfigJson string = `[
+{"mac": "a4c1381c0390","model": "xiaomi_mijia","name": "mijia_salon1","desc":"Capteur dans le salon"},
+{"mac": "a4c1386b6dc6","model": "xiaomi_mijia","name": "mijia_capteur1","desc":"Capteur 1"},
+{"mac": "a4c1382b1044","model": "xiaomi_mijia","name": "mijia_capteur2","desc":"Capteur 2"},
+{"mac": "a4c138e73381","model": "xiaomi_mijia","name": "mijia_capteur3","desc":"Capteur 3"},
+{"mac": "a4c138634fff","model": "xiaomi_mijia","name": "mijia_capteur4","desc":"Capteur 4"},
+{"mac": "a4c1382c1d48","model": "xiaomi_mijia","name": "mijia_capteur5","desc":"Capteur 5"},
+{"mac": "a4c138a23543","model": "xiaomi_mijia","name": "mijia_capteur6","desc":"Capteur 6"},
+{"mac": "a4c138a09c8e","model": "xiaomi_mijia","name": "mijia_capteur7","desc":"Capteur 7"}
+]`
+var mijiaConfig = make([]MijiaDeviceConfig, 0)
 
 var (
 	// Args
@@ -40,6 +52,7 @@ var (
 	device              = flag.String("device", "default", "implementation of ble")
 	influx_only_connect = flag.Bool("influx-only-connect", false, "Connect InfluxDB without pushing metrics")
 	period              = flag.Int("period", 60, "Duration (in sec) between two influxdB metrics updates")
+	debug               = flag.Bool("debug", false, "Enable debug")
 
 	// InfluxDB2
 	client   influxdb2.Client
@@ -56,8 +69,9 @@ type MijiaMetrics struct {
 	FrameCount uint8
 }
 
-var lockMetrics = sync.RWMutex{}
+// Map for latest measurement and its Mutex
 var lastMetrics = make(map[[6]byte]*MijiaMetrics)
+var lockMetrics = sync.RWMutex{}
 
 var lastUpload = time.Now()
 
@@ -123,17 +137,31 @@ func chuser(username string) (uid, gid int) {
  */
 func influxSender(metrics map[[6]byte]*MijiaMetrics, dryRun bool) {
 
+	cnt := int(0)
 	for {
+		cnt = 0
 		if dryRun == true {
 			fmt.Println("Sending influxdb metrics disabled (only_connect) ")
 		} else {
 
 			for mac, data := range metrics {
 				hs := hex.EncodeToString(data.Mac[:])
-				fmt.Printf("TX %s: Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, data.RSSI, data.Temp, data.Humi, data.Batt, data.FrameCount)
+
+				// Get name from json config
+				dName := "unknown"
+				for _, s := range mijiaConfig {
+					if s.Mac == hs {
+						dName = s.Name
+					}
+				}
+
+				if *debug {
+					fmt.Printf("TX %s: Name:%s Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, dName, data.RSSI, data.Temp, data.Humi, data.Batt, data.FrameCount)
+				}
 				p := influxdb2.NewPoint(*influx_measurement,
 					map[string]string{"type": "mijia", "source": hs},
-					map[string]interface{}{"rssi": data.RSSI, "temp": data.Temp, "humi": data.Humi, "batt": data.Batt}, time.Now())
+					map[string]interface{}{"rssi": data.RSSI, "temp": data.Temp, "humi": data.Humi, "batt": data.Batt, "name": dName}, time.Now())
+				cnt++
 				writeAPI.WritePoint(p)
 				lockMetrics.Lock()
 				delete(metrics, mac)
@@ -144,7 +172,7 @@ func influxSender(metrics map[[6]byte]*MijiaMetrics, dryRun bool) {
 		}
 
 		time.Sleep(time.Duration(*period) * time.Second)
-		fmt.Println("influxSender: Sleep ", *period, "sec.")
+		fmt.Println("influxSender: Sent ", cnt, " measurements, now sleeping ", *period, "sec.")
 	}
 }
 
@@ -178,7 +206,9 @@ func advHandler(a ble.Advertisement) {
 			mi, err := decodeMijia(svc.Data)
 			if err == nil {
 				hs := hex.EncodeToString(mi.Mac[:])
-				fmt.Printf("RX %s: Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, a.RSSI(), mi.Temp, mi.Humi, mi.Batt, mi.FrameCount)
+				if *debug {
+					fmt.Printf("RX %s: Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, a.RSSI(), mi.Temp, mi.Humi, mi.Batt, mi.FrameCount)
+				}
 				mi.RSSI = a.RSSI()
 				lockMetrics.Lock()
 				lastMetrics[mi.Mac] = mi
@@ -208,6 +238,14 @@ func main() {
 
 	//fmt.Println("Switching to ", *dropuser, " user")
 	//chuser(*dropuser)
+
+	// Mijia configuration json
+	err = json.Unmarshal([]byte(nodeConfigJson), &mijiaConfig)
+	if err != nil {
+		log.Fatalf("Can't parse json file :", err)
+	}
+
+	fmt.Println("Mijia json configuration : ", len(mijiaConfig), " entries found")
 
 	//InfluxDB connection
 	fmt.Println("Connecting to influxDB server")
