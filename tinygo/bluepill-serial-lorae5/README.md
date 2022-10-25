@@ -21,3 +21,5 @@ picocom --omap crlf -b 9600 /dev/ttyUSB0
 ```
 
 
+![Image](./extra/wiring.png)
+
