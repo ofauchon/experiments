@@ -37,7 +37,8 @@ var nodeConfigJson string = `[
 {"mac": "a4c138634fff","model": "xiaomi_mijia","name": "mijia_capteur4","desc":"Capteur 4"},
 {"mac": "a4c1382c1d48","model": "xiaomi_mijia","name": "mijia_capteur5","desc":"Capteur 5"},
 {"mac": "a4c138a23543","model": "xiaomi_mijia","name": "mijia_capteur6","desc":"Capteur 6"},
-{"mac": "a4c138a09c8e","model": "xiaomi_mijia","name": "mijia_capteur7","desc":"Capteur 7"}
+{"mac": "a4c138a09c8e","model": "xiaomi_mijia","name": "mijia_capteur7","desc":"Capteur 7"},
+{"mac": "a4c1384f7a79","model": "xiaomi_mijia","name": "mijia_capteur8","desc":"Capteur 8"}
 ]`
 var mijiaConfig = make([]MijiaDeviceConfig, 0)
 
@@ -79,6 +80,12 @@ var lastUpload = time.Now()
  * decodeMijia decodes BLE adv payload
  */
 func decodeMijia(dat []byte) (*MijiaMetrics, error) {
+
+	if *debug {
+		hex := hex.EncodeToString(dat)
+		fmt.Println("RX: %d bytes [%s]", hex)
+	}
+
 	if len(dat) != 15 {
 		return nil, errors.New("Bad packet length")
 	}
@@ -89,6 +96,7 @@ func decodeMijia(dat []byte) (*MijiaMetrics, error) {
 		ret.Mac[i] = dat[5-i]
 	}
 
+	// See https://www.fanjoe.be/?p=3911 for negative temperatures
 	ret.Temp = float32(uint32(dat[7])*0xFF+uint32(dat[6])) / 100
 	ret.Humi = float32(uint32(dat[9])*0xFF+uint32(dat[8])) / 100
 	ret.Batt = float32(uint32(dat[11])*0xFF+uint32(dat[10])) / 1000
