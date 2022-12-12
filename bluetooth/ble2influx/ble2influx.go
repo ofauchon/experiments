@@ -50,7 +50,8 @@ var (
 	influx_bucket       = flag.String("influx_bucket", "default", "Sets the influxDB bucket")
 	influx_measurement  = flag.String("influx_measurement", "metro", "Sets the influxDB measurement name")
 	dropuser            = flag.String("user", "default", "Drop privileges to <user>")
-	device              = flag.String("device", "default", "implementation of ble")
+	device              = flag.String("device", "", "implementation of ble")
+	sensors_descriptor  = flag.String("desc", "~/.config/ble2influx/sensors.json", "Sensors descriptor file")
 	influx_only_connect = flag.Bool("influx-only-connect", false, "Connect InfluxDB without pushing metrics")
 	period              = flag.Int("period", 60, "Duration (in sec) between two influxdB metrics updates")
 	debug               = flag.Bool("debug", false, "Enable debug")
@@ -231,9 +232,7 @@ func advHandler(a ble.Advertisement) {
 	}
 }
 
-//
 // MAIN
-//
 func main() {
 	fmt.Println("Starting ble2influx")
 	flag.Parse()
@@ -247,13 +246,17 @@ func main() {
 	//fmt.Println("Switching to ", *dropuser, " user")
 	//chuser(*dropuser)
 
-	// Mijia configuration json
-	err = json.Unmarshal([]byte(nodeConfigJson), &mijiaConfig)
-	if err != nil {
-		log.Fatalf("Can't parse json file :", err)
-	}
+	// Try to read default
+	if _, err := os.Stat(*sensors_descriptor); err == nil {
+		fmt.Println("Using json sensor descriptor file ", sensors_descriptor)
 
-	fmt.Println("Mijia json configuration : ", len(mijiaConfig), " entries found")
+		// Mijia configuration json
+		err = json.Unmarshal([]byte(nodeConfigJson), &mijiaConfig)
+		if err != nil {
+			log.Fatalf("Can't parse json file :", err)
+		}
+		fmt.Println("Mijia json configuration : ", len(mijiaConfig), " entries found")
+	}
 
 	//InfluxDB connection
 	fmt.Println("Connecting to influxDB server")
