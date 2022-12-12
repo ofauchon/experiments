@@ -1,19 +1,37 @@
 
+# Project description
 
-# Build and run 
+Ble2influx decodes Mijia Bluetooth frames and sends metrics to influxdb.
+
+# Build
+
+Just run :
+```
+$ make
+```
+
+Or do it by hand:
 
 ```
 go get ./...
-go build main.go 
-sudo ./main -user olivier
+go build ble2influx.go
 ```
 
-# Cross compile for Raspberry Pi 3b+
+You can even cross compile for RPI with
+```
+$ make build-rpi
+```
 
-GOOS=linux GOARCH=arm GOARM=7 go build -o ble2influx-rpi ble2influx.go
+# Run
+
+```
+$ make
+$ sudo ./build/ble2influx -user simpleuser
+```
+note: ble2influx needs root permissions to open /dev/hci device, but it'll drop to unprivileged if needed
 
 
-# Some words about the protocol 
+# Some words about the Mijia protocol
 
 You'll find all the details on the Xiaomi Mijia alternate driver repository:
 https://github.com/pvvx/ATC_MiThermometer#bluetooth-advertising-formats
