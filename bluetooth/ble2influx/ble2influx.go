@@ -9,7 +9,9 @@ import (
 	"log"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -29,17 +31,6 @@ type MijiaDeviceConfig struct {
 	Desc  string `json:"desc"`
 }
 
-var nodeConfigJson string = `[
-{"mac": "a4c1381c0390","model": "xiaomi_mijia","name": "mijia_salon1","desc":"Capteur dans le salon"},
-{"mac": "a4c1386b6dc6","model": "xiaomi_mijia","name": "mijia_capteur1","desc":"Capteur 1"},
-{"mac": "a4c1382b1044","model": "xiaomi_mijia","name": "mijia_capteur2","desc":"Capteur 2"},
-{"mac": "a4c138e73381","model": "xiaomi_mijia","name": "mijia_capteur3","desc":"Capteur 3"},
-{"mac": "a4c138634fff","model": "xiaomi_mijia","name": "mijia_capteur4","desc":"Capteur 4"},
-{"mac": "a4c1382c1d48","model": "xiaomi_mijia","name": "mijia_capteur5","desc":"Capteur 5"},
-{"mac": "a4c138a23543","model": "xiaomi_mijia","name": "mijia_capteur6","desc":"Capteur 6"},
-{"mac": "a4c138a09c8e","model": "xiaomi_mijia","name": "mijia_capteur7","desc":"Capteur 7"},
-{"mac": "a4c1384f7a79","model": "xiaomi_mijia","name": "mijia_capteur8","desc":"Capteur 8"}
-]`
 var mijiaConfig = make([]MijiaDeviceConfig, 0)
 
 var (
@@ -84,7 +75,7 @@ func decodeMijia(dat []byte) (*MijiaMetrics, error) {
 
 	if *debug {
 		hex := hex.EncodeToString(dat)
-		fmt.Println("RX: %d bytes [%s]", hex)
+		fmt.Printf("RX: %d bytes [%s]\n", len(dat), hex)
 	}
 
 	if len(dat) != 15 {
@@ -247,16 +238,28 @@ func main() {
 	//chuser(*dropuser)
 
 	// Try to read default
-	fmt.Println("Trying to load sensor descriptor: ", *sensors_descriptor)
-	if _, err := os.Stat(*sensors_descriptor); err == nil {
-		fmt.Println("Using json sensor descriptor file ", sensors_descriptor)
+	descFile := *sensors_descriptor
+	if strings.HasPrefix(descFile, "~/") {
+		dirname, _ := os.UserHomeDir()
+		descFile = filepath.Join(dirname, descFile[2:])
+	}
+	fmt.Println("Trying to load sensor descriptor: ", descFile)
+	if _, err := os.Stat(descFile); err == nil {
+		fmt.Println("Using json sensor descriptor file ", descFile)
+
+		dat, err := os.ReadFile(descFile)
+		if err != nil {
+			log.Fatalf("Can't read %s", descFile)
+		}
 
 		// Mijia configuration json
-		err = json.Unmarshal([]byte(nodeConfigJson), &mijiaConfig)
+		err = json.Unmarshal(dat, &mijiaConfig)
 		if err != nil {
 			log.Fatalf("Can't parse json file :", err)
 		}
 		fmt.Println("Mijia json configuration : ", len(mijiaConfig), " entries found")
+	} else {
+		fmt.Println("No sensor descriptor json ", descFile, " ", err)
 	}
 
 	//InfluxDB connection
