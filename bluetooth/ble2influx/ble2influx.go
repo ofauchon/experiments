@@ -247,6 +247,7 @@ func main() {
 	//chuser(*dropuser)
 
 	// Try to read default
+	fmt.Println("Trying to load sensor descriptor: ", *sensors_descriptor)
 	if _, err := os.Stat(*sensors_descriptor); err == nil {
 		fmt.Println("Using json sensor descriptor file ", sensors_descriptor)
 

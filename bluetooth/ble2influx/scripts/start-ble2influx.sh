@@ -8,7 +8,8 @@ influx_bucket="YOUR BUCKET"
 #ble2influx will drop root privileges, and switch back to USER
 usr=$USER
 
-sudo ./ble2influx \
+sudo ./build/ble2influx \
+	-desc \
 	-influx_server ${influx_server} \
 	-influx_token=${influx_token} \
 	-influx_measurement=${influx_measurement} \

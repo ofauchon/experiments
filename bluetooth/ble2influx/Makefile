@@ -1,7 +1,7 @@
-all: build build-rpi
+all: build-current
 
-build:
-	@echo "Building for current arch"
+build-current:
+	@echo "Building for current arch (build/ble2influx)"
 	@mkdir -p build
 	@go build -o build/ble2influx ble2influx.go 
 
