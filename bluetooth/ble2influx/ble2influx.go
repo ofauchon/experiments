@@ -89,7 +89,12 @@ func decodeMijia(dat []byte) (*MijiaMetrics, error) {
 	}
 
 	// See https://www.fanjoe.be/?p=3911 for negative temperatures
-	ret.Temp = float32(uint32(dat[7])*0xFF+uint32(dat[6])) / 100
+	temp := uint32(dat[7])*0xFF + uint32(dat[6])
+	if dat[7] > 0x80 {
+		ret.Temp = float32(-65535+int32(temp)) / 100
+	} else {
+		ret.Temp = float32(temp) / 100
+	}
 	ret.Humi = float32(uint32(dat[9])*0xFF+uint32(dat[8])) / 100
 	ret.Batt = float32(uint32(dat[11])*0xFF+uint32(dat[10])) / 1000
 	ret.FrameCount = dat[12]
@@ -252,16 +257,21 @@ func main() {
 			log.Fatalf("Can't read %s", descFile)
 		}
 
-		// Mijia configuration json
-		err = json.Unmarshal(dat, &mijiaConfig)
-		if err != nil {
-			log.Fatalf("Can't parse json file :", err)
-		}
-		fmt.Println("Mijia json configuration : ", len(mijiaConfig), " entries found")
-	} else {
-		fmt.Println("No sensor descriptor json ", descFile, " ", err)
-	}
+		// Try to read default json sensors configuration
+		fmt.Println("Trying to load sensor descriptor: ", *sensors_descriptor)
+		if _, err := os.Stat(*sensors_descriptor); err == nil {
+			fmt.Println("Using json sensor descriptor file ", sensors_descriptor)
 
+			// Mijia configuration json
+			err = json.Unmarshal(dat, &mijiaConfig)
+			if err != nil {
+				log.Fatalf("Can't parse json file :", err)
+			}
+			fmt.Println("Mijia json configuration : ", len(mijiaConfig), " entries found")
+		} else {
+			fmt.Println("No sensor descriptor json ", descFile, " ", err)
+		}
+	}
 	//InfluxDB connection
 	fmt.Println("Connecting to influxDB server")
 	fmt.Println("  server", *influx_server, " bucket:", *influx_bucket, " org:", *influx_org)
