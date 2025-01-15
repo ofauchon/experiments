@@ -22,6 +22,11 @@ You can even cross compile for RPI with
 $ make build-rpi
 ```
 
+# Install influxdb
+
+$ sudo apt-get install influxdb-client influxdb
+
+
 # Run
 
 ```

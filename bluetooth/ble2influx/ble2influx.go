@@ -20,8 +20,10 @@ import (
 	"github.com/go-ble/ble/examples/lib/dev"
 	"github.com/pkg/errors"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go"
-	"github.com/influxdata/influxdb-client-go/api"
+	"github.com/davecgh/go-spew/spew"
+
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	influxdb2api "github.com/influxdata/influxdb-client-go/v2/api"
 )
 
 type MijiaDeviceConfig struct {
@@ -35,21 +37,21 @@ var mijiaConfig = make([]MijiaDeviceConfig, 0)
 
 var (
 	// Args
-	influx_server       = flag.String("influx_server", "http://localhost:8086", "Sets the influxDB server")
-	influx_token        = flag.String("influx_token", "", "Sets the influxDB token")
-	influx_org          = flag.String("influx_org", "your.org", "Sets the influxDB organization")
-	influx_bucket       = flag.String("influx_bucket", "default", "Sets the influxDB bucket")
-	influx_measurement  = flag.String("influx_measurement", "metro", "Sets the influxDB measurement name")
+	influx_server       = flag.String("influx-server", "http://localhost:8086", "Sets the influxDB server")
+	influx_token        = flag.String("influx-token", "", "Sets the influxDB token")
+	influx_org          = flag.String("influx-org", "your.org", "Sets the influxDB organization")
+	influx_bucket       = flag.String("influx-bucket", "default", "Sets the influxDB bucket")
+	influx_measurement  = flag.String("influx-measurement", "metro", "Sets the influxDB measurement name")
 	dropuser            = flag.String("user", "default", "Drop privileges to <user>")
 	device              = flag.String("device", "", "implementation of ble")
 	sensors_descriptor  = flag.String("desc", "~/.config/ble2influx/sensors.json", "Sensors descriptor file")
 	influx_only_connect = flag.Bool("influx-only-connect", false, "Connect InfluxDB without pushing metrics")
 	period              = flag.Int("period", 60, "Duration (in sec) between two influxdB metrics updates")
-	debug               = flag.Bool("debug", false, "Enable debug")
+	debug               = flag.Int("debug", 0, "0 none, 1->3 to enable with more or less verbosity ")
 
 	// InfluxDB2
 	client   influxdb2.Client
-	writeAPI api.WriteAPI
+	writeAPI influxdb2api.WriteAPIBlocking
 )
 
 // Structs and Decoder for Mijia ATC advertisements (custom firmware)
@@ -72,11 +74,6 @@ var lastUpload = time.Now()
  * decodeMijia decodes BLE adv payload
  */
 func decodeMijia(dat []byte) (*MijiaMetrics, error) {
-
-	if *debug {
-		hex := hex.EncodeToString(dat)
-		fmt.Printf("RX: %d bytes [%s]\n", len(dat), hex)
-	}
 
 	if len(dat) != 15 {
 		return nil, errors.New("Bad packet length")
@@ -142,40 +139,46 @@ func chuser(username string) (uid, gid int) {
  */
 func influxSender(metrics map[[6]byte]*MijiaMetrics, dryRun bool) {
 
+	fmt.Println("influxSender: Start loop")
 	cnt := int(0)
 	for {
 		cnt = 0
 		if dryRun == true {
 			fmt.Println("Sending influxdb metrics disabled (only_connect) ")
-		} else {
-
-			for mac, data := range metrics {
-				hs := hex.EncodeToString(data.Mac[:])
-
-				// Get name from json config
-				dName := "unknown"
-				for _, s := range mijiaConfig {
-					if s.Mac == hs {
-						dName = s.Name
-					}
-				}
-
-				if *debug {
-					fmt.Printf("TX %s: Name:%s Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, dName, data.RSSI, data.Temp, data.Humi, data.Batt, data.FrameCount)
-				}
-				p := influxdb2.NewPoint(*influx_measurement,
-					map[string]string{"type": "mijia", "source": hs},
-					map[string]interface{}{"rssi": data.RSSI, "temp": data.Temp, "humi": data.Humi, "batt": data.Batt, "name": dName}, time.Now())
-				cnt++
-				writeAPI.WritePoint(p)
-				lockMetrics.Lock()
-				delete(metrics, mac)
-				lockMetrics.Unlock()
-			}
-			writeAPI.Flush()
-			lastUpload = time.Now()
+			continue
 		}
 
+		fmt.Println("influxSender: Metrics queue length:", len(metrics))
+		for mac, data := range metrics {
+			hs := hex.EncodeToString(data.Mac[:])
+
+			// Get name from json config
+			dName := "unknown"
+			for _, s := range mijiaConfig {
+				if s.Mac == hs {
+					dName = s.Name
+				}
+			}
+
+			if *debug > 0 {
+				fmt.Printf("TX %s: Name:%s Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, dName, data.RSSI, data.Temp, data.Humi, data.Batt, data.FrameCount)
+			}
+			p := influxdb2.NewPoint(*influx_measurement,
+				map[string]string{"type": "mijia", "source": hs},
+				map[string]interface{}{"rssi": data.RSSI, "temp": data.Temp, "humi": data.Humi, "batt": data.Batt, "name": dName}, time.Now())
+			cnt++
+			err := writeAPI.WritePoint(context.Background(), p)
+			if err != nil {
+				fmt.Println("influxSender: Error TX :", err)
+			}
+			lockMetrics.Lock()
+			delete(metrics, mac)
+			lockMetrics.Unlock()
+		}
+		//writeAPI.Flush()
+		lastUpload = time.Now()
+
+		fmt.Println("influxSender: Sleep")
 		time.Sleep(time.Duration(*period) * time.Second)
 		fmt.Println("influxSender: Sent ", cnt, " measurements, now sleeping ", *period, "sec.")
 	}
@@ -198,12 +201,29 @@ func chkErr(err error) {
  */
 func advHandler(a ble.Advertisement) {
 
-	if len(a.ServiceData()) > 0 {
+	// Dump received frame
+	if *debug > 1 {
+		fmt.Println("vvvvv-------------------")
+		fmt.Printf("  Found device: %s\n", a.Addr())
+		fmt.Printf("  Local Name: %s\n", a.LocalName())
+		fmt.Printf("  RSSI: %d\n", a.RSSI())
+		fmt.Printf("  Manufacturer Data: %x\n", a.ManufacturerData())
+		fmt.Printf("  Service UUIDs: %v\n\n", a.Services())
+		fmt.Printf("  Service DATA: %v\n\n", a.ServiceData())
+		fmt.Println("~~~~~-------------------")
+		s := spew.Sdump(a)
+		fmt.Println(s)
+		fmt.Println("^^^^^-------------------")
+
+	}
+	if strings.HasPrefix(a.LocalName(), "ATC_") && len(a.ServiceData()) > 0 {
 		for _, svc := range a.ServiceData() {
 
 			// Discard if it's not Mijia (0x181a)
 			if !svc.UUID.Equal(ble.UUID16(0x181a)) {
-				fmt.Println("Skipping UUID", svc.UUID)
+				if *debug > 2 {
+					fmt.Println("Skipping UUID", svc.UUID)
+				}
 				continue
 			}
 
@@ -211,8 +231,8 @@ func advHandler(a ble.Advertisement) {
 			mi, err := decodeMijia(svc.Data)
 			if err == nil {
 				hs := hex.EncodeToString(mi.Mac[:])
-				if *debug {
-					fmt.Printf("RX %s: Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, a.RSSI(), mi.Temp, mi.Humi, mi.Batt, mi.FrameCount)
+				if *debug > 0 {
+					fmt.Printf("RX: MIJIA: %s: Rssi:%d Temp:%.2f Humi:%.2f Batt:%.2f Frame:%d\n", hs, a.RSSI(), mi.Temp, mi.Humi, mi.Batt, mi.FrameCount)
 				}
 				mi.RSSI = a.RSSI()
 				lockMetrics.Lock()
@@ -220,7 +240,7 @@ func advHandler(a ble.Advertisement) {
 				lockMetrics.Unlock()
 
 			} else {
-				fmt.Println("Bad Mijia payload")
+				fmt.Println("Error decoding frame:", err)
 			}
 
 		}
@@ -278,7 +298,7 @@ func main() {
 	ble.SetDefaultDevice(d)
 	client = influxdb2.NewClient(*influx_server, *influx_token)
 	defer client.Close()
-	writeAPI = client.WriteAPI(*influx_org, *influx_bucket)
+	writeAPI = client.WriteAPIBlocking(*influx_org, *influx_bucket)
 
 	// Run routine for sending Mijia metrics
 	go influxSender(lastMetrics, *influx_only_connect)
